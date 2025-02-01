@@ -69,6 +69,12 @@ for period in lookback_periods.keys():
 
 rs_ratings_df = pd.DataFrame(rs_ratings, index=performance_df.index).fillna(np.nan)
 
+# Add filters
+st.sidebar.header("Filters")
+filter_rs_12m = st.sidebar.checkbox("RS 12M > 80")
+filter_above_ma_200 = st.sidebar.checkbox("Above 200 MA")
+filter_ema_trend = st.sidebar.checkbox("EMA 5 > EMA 20")
+
 # Store results in a DataFrame
 etf_ranking = pd.DataFrame({
     "ETF": performance_df.index,
@@ -77,12 +83,21 @@ etf_ranking = pd.DataFrame({
     "RS Rating 1M": rs_ratings_df["1M"].tolist(),
     "RS Rating 1W": rs_ratings_df["1W"].tolist(),
     "Above 200 MA": above_ma_200.reindex(performance_df.index).fillna(False).tolist(),
-    "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown").tolist(),
-    "12M Performance (%)": performance_df["12M"].tolist(),
-    "3M Performance (%)": performance_df["3M"].tolist(),
-    "1M Performance (%)": performance_df["1M"].tolist(),
-    "1W Performance (%)": performance_df["1W"].tolist()
+    "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown").tolist()
 })
+
+# Apply filters
+if filter_rs_12m:
+    etf_ranking = etf_ranking[etf_ranking["RS Rating 12M"] > 80]
+if filter_above_ma_200:
+    etf_ranking = etf_ranking[etf_ranking["Above 200 MA"]]
+if filter_ema_trend:
+    etf_ranking = etf_ranking[etf_ranking["EMA Trend"] == "EMA 5 > EMA 20"]
+
+# Add performance metrics at the end
+performance_columns = ["12M Performance (%)", "3M Performance (%)", "1M Performance (%)", "1W Performance (%)"]
+for col in performance_columns:
+    etf_ranking[col] = performance_df[col.replace(" Performance (%)", "")].tolist()
 
 # Display ETF Rankings in Streamlit
 st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False))
