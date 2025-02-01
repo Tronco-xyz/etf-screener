@@ -53,11 +53,13 @@ performance_df = pd.DataFrame(performance)
 
 # Calculate moving averages
 ma_200 = etf_data.rolling(window=200).mean()
+ma_50 = etf_data.rolling(window=50).mean()
 ema_5 = etf_data.ewm(span=5, adjust=False).mean()
 ema_20 = etf_data.ewm(span=20, adjust=False).mean()
 
-# Determine if price is above or below 200-day MA
+# Determine if price is above or below 200-day & 50-day MA
 above_ma_200 = etf_data.iloc[-1] > ma_200.iloc[-1]
+above_ma_50 = etf_data.iloc[-1] > ma_50.iloc[-1]
 ema_trend = pd.Series(np.where(ema_5.iloc[-1] > ema_20.iloc[-1], "EMA 5 > EMA 20", "EMA 5 < EMA 20"), index=valid_etfs)
 
 # Calculate RS Rankings (percentile-based scores from 1-99)
@@ -73,38 +75,35 @@ rs_ratings_df = pd.DataFrame(rs_ratings, index=performance_df.index).fillna(np.n
 st.sidebar.header("Filters")
 filter_rs_12m = st.sidebar.checkbox("RS 12M > 80")
 filter_above_ma_200 = st.sidebar.checkbox("Above 200 MA")
+filter_above_ma_50 = st.sidebar.checkbox("Above 50 MA")
 filter_ema_trend = st.sidebar.checkbox("EMA 5 > EMA 20")
 
 # Store results in a DataFrame
 etf_ranking = pd.DataFrame({
     "ETF": performance_df.index,
-    "RS Rating 12M": rs_ratings_df["12M"],
-    "RS Rating 3M": rs_ratings_df["3M"],
-    "RS Rating 1M": rs_ratings_df["1M"],
-    "RS Rating 1W": rs_ratings_df["1W"],
-    "Above 200 MA": above_ma_200.reindex(performance_df.index).fillna(False),
-    "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown")
+    "RS Rating 12M": rs_ratings_df["12M"].tolist(),
+    "RS Rating 3M": rs_ratings_df["3M"].tolist(),
+    "RS Rating 1M": rs_ratings_df["1M"].tolist(),
+    "RS Rating 1W": rs_ratings_df["1W"].tolist(),
+    "Above 200 MA": above_ma_200.reindex(performance_df.index).fillna(False).tolist(),
+    "Above 50 MA": above_ma_50.reindex(performance_df.index).fillna(False).tolist(),
+    "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown").tolist()
 })
 
-# Apply filters safely
-if filter_rs_12m and "RS Rating 12M" in etf_ranking.columns:
-    etf_ranking = etf_ranking[pd.to_numeric(etf_ranking["RS Rating 12M"], errors='coerce') > 80]
+# Apply filters
+if filter_rs_12m:
+    etf_ranking = etf_ranking[etf_ranking["RS Rating 12M"] > 80]
 if filter_above_ma_200:
     etf_ranking = etf_ranking[etf_ranking["Above 200 MA"]]
+if filter_above_ma_50:
+    etf_ranking = etf_ranking[etf_ranking["Above 50 MA"]]
 if filter_ema_trend:
     etf_ranking = etf_ranking[etf_ranking["EMA Trend"] == "EMA 5 > EMA 20"]
 
-# Add performance metrics at the end safely
-for period in ["12M", "3M", "1M", "1W"]:
-    etf_ranking[f"{period} Performance (%)"] = performance_df[period]
-
-# Reorder columns to move performance to the right
-column_order = [
-    "ETF", "RS Rating 12M", "RS Rating 3M", "RS Rating 1M", "RS Rating 1W",
-    "Above 200 MA", "EMA Trend",
-    "12M Performance (%)", "3M Performance (%)", "1M Performance (%)", "1W Performance (%)"
-]
-etf_ranking = etf_ranking[column_order]
+# Add performance metrics at the end
+performance_columns = ["12M Performance (%)", "3M Performance (%)", "1M Performance (%)", "1W Performance (%)"]
+for col in performance_columns:
+    etf_ranking[col] = performance_df[col.replace(" Performance (%)", "")].tolist()
 
 # Display ETF Rankings in Streamlit
 st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False))
