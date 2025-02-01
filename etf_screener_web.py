@@ -65,28 +65,27 @@ rs_ratings = {}
 for period in lookback_periods.keys():
     valid_performance = performance_df[period].dropna()
     ranked = rankdata(valid_performance, method="average") / len(valid_performance) * 99
-    rs_ratings[period] = dict(zip(valid_performance.index, ranked))
+    rs_ratings[period] = dict(zip(valid_performance.index, np.round(ranked, 2)))
 
-rs_ratings_df = pd.DataFrame(rs_ratings, index=performance_df.index).fillna(np.nan).round(2)
+rs_ratings_df = pd.DataFrame(rs_ratings, index=performance_df.index).fillna(np.nan)
 
-# Store results in a DataFrame with rearranged columns
+# Store results in a DataFrame
 etf_ranking = pd.DataFrame({
     "ETF": performance_df.index,
-    "RS Rating 12M": rs_ratings_df["12M"],
-    "RS Rating 3M": rs_ratings_df["3M"],
-    "RS Rating 1M": rs_ratings_df["1M"],
-    "RS Rating 1W": rs_ratings_df["1W"],
+    "RS Rating 12M": rs_ratings_df["12M"].tolist(),
+    "RS Rating 3M": rs_ratings_df["3M"].tolist(),
+    "RS Rating 1M": rs_ratings_df["1M"].tolist(),
+    "RS Rating 1W": rs_ratings_df["1W"].tolist(),
     "Above 200 MA": above_ma_200.reindex(performance_df.index).fillna(False).tolist(),
     "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown").tolist(),
-    "12M Performance (%)": performance_df["12M"],
-    "3M Performance (%)": performance_df["3M"],
-    "1M Performance (%)": performance_df["1M"],
-    "1W Performance (%)": performance_df["1W"],
+    "12M Performance (%)": performance_df["12M"].tolist(),
+    "3M Performance (%)": performance_df["3M"].tolist(),
+    "1M Performance (%)": performance_df["1M"].tolist(),
+    "1W Performance (%)": performance_df["1W"].tolist()
 })
 
 # Display ETF Rankings in Streamlit
-top_n = st.slider("Number of top ETFs to display:", 5, len(etf_ranking), 20)
-st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False).head(top_n))
+st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False))
 
 # Download Button
 st.download_button(
