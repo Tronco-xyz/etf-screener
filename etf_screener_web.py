@@ -78,12 +78,12 @@ filter_ema_trend = st.sidebar.checkbox("EMA 5 > EMA 20")
 # Store results in a DataFrame
 etf_ranking = pd.DataFrame({
     "ETF": performance_df.index,
-    "RS Rating 12M": rs_ratings_df["12M"].tolist(),
-    "RS Rating 3M": rs_ratings_df["3M"].tolist(),
-    "RS Rating 1M": rs_ratings_df["1M"].tolist(),
-    "RS Rating 1W": rs_ratings_df["1W"].tolist(),
-    "Above 200 MA": above_ma_200.reindex(performance_df.index).fillna(False).tolist(),
-    "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown").tolist()
+    "RS Rating 12M": rs_ratings_df["12M"],
+    "RS Rating 3M": rs_ratings_df["3M"],
+    "RS Rating 1M": rs_ratings_df["1M"],
+    "RS Rating 1W": rs_ratings_df["1W"],
+    "Above 200 MA": above_ma_200.reindex(performance_df.index).fillna(False),
+    "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown")
 })
 
 # Apply filters safely
@@ -94,10 +94,9 @@ if filter_above_ma_200:
 if filter_ema_trend:
     etf_ranking = etf_ranking[etf_ranking["EMA Trend"] == "EMA 5 > EMA 20"]
 
-# Add performance metrics at the end
-performance_columns = ["12M Performance (%)", "3M Performance (%)", "1M Performance (%)", "1W Performance (%)"]
-for col in performance_columns:
-    etf_ranking[col] = performance_df[col.replace(" Performance (%)", "")].tolist()
+# Add performance metrics at the end safely
+for period in ["12M", "3M", "1M", "1W"]:
+    etf_ranking[f"{period} Performance (%)"] = performance_df[period]
 
 # Reorder columns to move performance to the right
 column_order = [
