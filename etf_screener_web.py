@@ -6,7 +6,24 @@ from scipy.stats import rankdata
 
 # Updated ETF List without Leverage or Short ETFs
 etf_symbols = [
-  "TDG", "SHW", "PYPL", "PNC", "PLTR", "PH", "NOW", "META", "MCO", "LOW", "KKR", "HCA", "GEV","GE","FI","CARR","BX","BLK","AXP","ANET","AMGN","BSX","NFLX","NOC","SPGI","ADP","MMM","TMO","ECL","ISRG", "PGR", "GD", "MSI", "DE", "SO", "HD", "GS", "IBM", "JNJ"
+ "XLK", "SOXX", "IGV", "CIBR", "AIQ", "IYZ", 
+"XLF", "KRE", "IAI", 
+"XLV", "IBB", "IHI", 
+"XLE", "XOP", "TAN", 
+"XLY", "FDN", 
+"XLI", "ITA", 
+"XLB", "LIT", 
+"XLU", 
+"EFA", "VEA", 
+"VWO", "EEM", 
+"EWJ", "MCHI", "INDA", "EWY", "EWT", "EWZ", 
+"GLD", "SLV", "GDX", 
+"USO", "BNO", 
+"DBC", "DBA", "LIT", 
+"TLT", "IEF", "SHY", 
+"LQD", "HYG", 
+"MUB", 
+"BNDX", "EMB"
 ]
 
 # Streamlit UI
