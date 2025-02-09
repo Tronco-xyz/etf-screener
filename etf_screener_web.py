@@ -6,35 +6,40 @@ from scipy.stats import rankdata
 
 # Updated ETF List without Leverage or Short ETFs
 etf_symbols = [
- "XLK", "SOXX", "IGV", "CIBR", "AIQ", "IYZ", 
-"XLF", "KRE", "IAI", 
-"XLV", "IBB", "IHI", 
-"XLE", "XOP", "TAN", 
-"XLY", "FDN", 
-"XLI", "ITA", 
-"XLB", "LIT", 
-"XLU", 
-"EFA", "VEA", 
-"VWO", "EEM", 
-"EWJ", "MCHI", "INDA", "EWY", "EWT", "EWZ", 
-"GLD", "SLV", "GDX", 
-"USO", "BNO", 
-"DBC", "DBA", "LIT", 
-"TLT", "IEF", "SHY", 
-"LQD", "HYG", 
-"MUB", 
-"BNDX", "EMB"
+    "XLK", "SOXX", "IGV", "CIBR", "AIQ", "IYZ",
+    "XLF", "KRE", "IAI",
+    "XLV", "IBB", "IHI",
+    "XLE", "XOP", "TAN",
+    "XLY", "FDN",
+    "XLI", "ITA",
+    "XLB", "LIT",
+    "XLU",
+    "EFA", "VEA",
+    "VWO", "EEM",
+    "EWJ", "MCHI", "INDA", "EWY", "EWT", "EWZ",
+    "GLD", "SLV", "GDX",
+    "USO", "BNO",
+    "DBC", "DBA", "LIT",
+    "TLT", "IEF", "SHY",
+    "LQD", "HYG",
+    "MUB",
+    "BNDX", "EMB"
 ]
 
 # Streamlit UI
 st.title("ETF Screener & RS Ranking")
 st.write("Live ETF ranking based on relative strength.")
 
-# Fetch historical price data from Yahoo Finance
-st.write("Fetching latest data...")
-etf_data = yf.download(etf_symbols, period="1y", interval="1d")
-if etf_data.empty:
-    st.error("Yahoo Finance returned empty data. Check ETF symbols and API limits.")
+try:
+    # Fetch historical price data from Yahoo Finance
+    st.write("Fetching latest data...")
+    etf_data = yf.download(etf_symbols, period="1y", interval="1d")
+    if etf_data.empty:
+        st.error("Yahoo Finance returned empty data. Check ETF symbols, API limits, or try again later.")
+        st.stop()
+
+except Exception as e:
+    st.error(f"An error occurred while fetching data: {e}")
     st.stop()
 
 # Extract 'Close' prices
@@ -54,10 +59,8 @@ etf_data = etf_data[valid_etfs]
 # Calculate performance over available periods
 performance = {}
 for period, days in lookback_periods.items():
-    performance[period] = {
-        etf: round(((etf_data[etf].iloc[-1] - etf_data[etf].iloc[-days]) / etf_data[etf].iloc[-days] * 100), 2)
-        if available_days[etf] >= days else np.nan for etf in valid_etfs
-    }
+    performance[period] = etf_data.pct_change(periods=days).iloc[-1] * 100
+    performance[period] = performance[period].dropna()
 
 performance_df = pd.DataFrame(performance)
 
@@ -100,7 +103,10 @@ etf_ranking = pd.DataFrame({
     "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown").tolist()
 })
 
-# Apply filters safely
+# Sort DataFrame by RS Rating 12M before applying filters
+etf_ranking = etf_ranking.sort_values(by="RS Rating 12M", ascending=False)
+
+# Apply filters safely, after sorting
 if filter_rs_12m:
     etf_ranking = etf_ranking[etf_ranking["RS Rating 12M"] > 80]
 if filter_above_ma_200:
@@ -117,17 +123,4 @@ for col in performance_columns:
     if period in performance_df.columns:
         etf_ranking[col] = performance_df[period].reindex(etf_ranking["ETF"]).values
 
-# Ensure only two decimal places for all numerical columns
-for col in etf_ranking.select_dtypes(include=[np.number]).columns:
-    etf_ranking[col] = etf_ranking[col].round(2)
-
-# Display ETF Rankings in Streamlit
-st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False))
-
-# Download Button
-st.download_button(
-    label="Download CSV",
-    data=etf_ranking.to_csv(index=False),
-    file_name="etf_ranking.csv",
-    mime="text/csv"
-)
+# Ensure only two decimal places for all numerical
