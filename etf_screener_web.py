@@ -24,7 +24,7 @@ LOOKBACK_PERIODS = {"12M": 252, "3M": 63, "1M": 20, "1W": 5}
 def get_etf_data(etf_symbols, period="1y", interval="1d"):
     """Fetch historical price data for ETFs using Yahoo Finance API."""
     try:
-        data = yf.download(etf_symbols, period=period, interval=interval)["Close"]
+        data = yf.download(etf_symbols, period=period, interval=interval)
         if data.empty:
             st.error("Yahoo Finance returned empty data. Check ETF symbols and API limits.")
             st.stop()
@@ -35,7 +35,11 @@ def get_etf_data(etf_symbols, period="1y", interval="1d"):
 
 def calculate_metrics(data):
     """Calculate moving averages and RS ratings."""
-  data["MA_200"] = data.xs("Close", axis=1, level=1).rolling(window=200).mean()
+    if data.empty:
+        st.error("Data is empty. Please check the fetched data.")
+        st.stop()
+
+    data["MA_200"] = data.xs("Close", axis=1, level=1).rolling(window=200).mean()
     data["MA_50"] = data.xs("Close", axis=1, level=1).rolling(window=50).mean()
 
     if data.isna().any().any():
@@ -44,7 +48,7 @@ def calculate_metrics(data):
 
     rs_ratings = {}
     for period, days in LOOKBACK_PERIODS.items():
-        valid_data = data.iloc[-days:].dropna()
+        valid_data = data.xs("Close", axis=1, level=1).iloc[-days:].dropna()
         ranked = rankdata(valid_data, method="average") / len(valid_data) * 99
         rs_ratings[period] = dict(zip(valid_data.index, np.round(ranked, 2)))
 
