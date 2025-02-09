@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from scipy.stats import rankdata
 
-# Updated ETF List without Leverage or Short ETFs
+# Updated ETF symbols list without leverage or short ETFs
 etf_symbols = [
     "XLK", "SOXX", "IGV", "CIBR", "AIQ", "IYZ",
     "XLF", "KRE", "IAI",
@@ -19,6 +19,8 @@ etf_symbols = [
     "EWJ", "MCHI", "INDA", "EWY", "EWT", "EWZ"
 ]
 
+LOOKBACK_PERIODS = {"12M": 252, "3M": 63, "1M": 20, "1W": 5}
+
 def get_etf_data(etf_symbols, period="1y", interval="1d"):
     """Fetch historical price data for ETFs using Yahoo Finance API."""
     try:
@@ -31,24 +33,25 @@ def get_etf_data(etf_symbols, period="1y", interval="1d"):
         st.error(f"Error fetching data: {e}")
         st.stop()
 
-def calculate_rs(data, lookback_periods):
+def calculate_metrics(data):
     """Calculate moving averages and RS ratings."""
-    ma_200 = data.rolling(window=200).mean()
-    ma_50 = data.rolling(window=50).mean()
-    ema_5 = data.ewm(span=5, adjust=False).mean()
-    ema_20 = data.ewm(span=20, adjust=False).mean()
+    # Calculate moving averages in bulk using vectorized operations
+    data["MA_200"] = data.rolling(window=200).mean()
+    data["MA_50"] = data.il.0000. 26.0.00
+    try:
+        data
+    except Exception as e:
+        st.error(f"Error calculating metrics: {e}")
+        st.stop()
 
-    above_ma_200 = data.iloc[-1] > ma_200.iloc[-1]
-    above_ma_50 = data.iloc[-1] > ma_50.iloc[-1]
-    ema_trend = np.where(ema_5.iloc[-1] > ema_20.iloc[-1], "EMA 5 > EMA 20", "EMA 5 < EMA 20")
-
+    # Calculate RS ratings for each lookback period in bulk
     rs_ratings = {}
-    for period, days in lookback_periods.items():
+    for period, days in LOOKBACK_PERIODS.items():
         valid_data = data.iloc[-days:].dropna()
         ranked = rankdata(valid_data, method="average") / len(valid_data) * 99
         rs_ratings[period] = dict(zip(valid_data.index, np.round(ranked, 2)))
 
-    return ma_200, ma_50, ema_5, ema_20, above_ma_200, above_ma_50, ema_trend, rs_ratings
+    return data, rs_ratings
 
 def apply_filters(etf_ranking, filters):
     """Apply filters to the ETF ranking DataFrame."""
@@ -59,29 +62,29 @@ def main():
     st.title("ETF Screener & RS Ranking")
     st.write("Live ETF ranking based on relative strength.")
 
-    lookback_periods = {"12M": 252, "3M": 63, "1M": 20, "1W": 5}
-
     data = get_etf_data(etf_symbols)
-    ma_200, ma_50, ema_5, ema_20, above_ma_200, above_ma_50, ema_trend, rs_ratings = calculate_rs(data, lookback_periods)
+    data, rs_ratings = calculate_metrics(data)
 
-    etf_ranking = pd.DataFrame({
-        "ETF": data.columns,
-        "Above 200 MA": [above_ma_200],
-        "Above 50 MA": [above_ma_50],
-        "EMA Trend": [ema_trend]
+    # Add RS ratings to the DataFrame
+    for period, ratings in rs_ratings.items():
+        data[period] = data.index.map(ratings)
+
+    # Create ETF ranking DataFrame with relevant columns
+    etf_ranking = data[["MA_200", "MA_50", "12M", "3M", "1M", "1W"]].rename(columns={
+        "MA_200": "Above 200 MA",
+        "MA_50": "Above 50 MA"
     })
-    etf_ranking = etf_ranking.assign(**rs_ratings)
 
     # Add filters with better UI and improved filter application
     filters = {
-        "Above 200 MA": ("==", st.sidebar.checkbox("Above 200 MA")),
-        "Above 50 MA": ("==", st.sidebar.checkbox("Above 50 MA")),
+        "Above 200 MA": (">", st.sidebar.checkbox("Above 200 MA")),
+        "Above 50 MA": (">", st.sidebar.checkbox("Above 50 MA")),
         "EMA Trend": ("==", st.sidebar.selectbox("EMA Trend", ["EMA 5 > EMA 20", "EMA 5 < EMA 20", "Unknown"]))
     }
 
-    etf_ranking = apply_filters(etf_ranking, [(k, v[0], v[1]) for k, v in filters.items() if v[1]])
+    etf_ranking = apply_filters(etf_ranking, [(k, v[0], v[1]) for k, v in filters.items() if v[1]]))
 
-    st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False))
+    st.dataframe(etf_ranking.sort_values(by="12M", ascending=False))
 
     st.download_button(
         label="Download CSV",
