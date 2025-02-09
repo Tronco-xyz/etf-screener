@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from scipy.stats import rankdata
 
-# ETF symbols list
+# List of non-leveraged ETF symbols
 etf_symbols = [
     "XLK", "SOXX", "IGV", "CIBR", "AIQ", "IYZ",
     "XLF", "KRE", "IAI",
@@ -28,7 +28,10 @@ def get_etf_data(etf_symbols, period="1y", interval="1d"):
         if data.empty:
             st.error("Yahoo Finance returned empty data. Check ETF symbols and API limits.")
             return None
-        return data.dropna()  # Remove any missing values initially
+        # Reorganize the data to have a single-level index
+        data = data.swaplevel(axis=1)
+        data.columns = ['_'.join(col).strip() for col in data.columns]
+        return data
     except Exception as e:
         st.error(f"Error fetching data: {e}")
         return None
@@ -40,24 +43,30 @@ def calculate_metrics(data):
         return None, None
 
     try:
-        # Ensure 'Close' column exists and is of float type
-        if "Close" not in data.columns or not isinstance(data["Close"].iloc[0], (int, float)):
-            raise ValueError("Invalid 'Close' data for calculations.")
+        # Extract the 'Close' column for each ETF
+        close_prices = data[['Close_' + ticker for ticker in etf_symbols]]
+        
+        # Convert to numeric, coerce errors to NaN
+        close_prices = close_prices.apply(pd.to_numeric, errors='coerce')
+        
+        # Remove any rows with NaN in 'Close' prices
+        close_prices = close_prices.dropna()
+        
+        if close_prices.empty:
+            st.error("Insufficient valid 'Close' data after filtering.")
+            return None, None
 
-        # Calculate Moving Averages with proper error handling
-        data["MA_200"] = data["Close"].rolling(window=200, min_periods=1).mean()
-        data["MA_50"] = data["Close"].rolling(window=50, min_periods=1).mean()
-
-        # Drop rows with any remaining NaN values after calculations
-        data = data.dropna(subset=["MA_200", "MA_50"])
+        # Calculate Moving Averages
+        data["MA_200"] = close_prices.rolling(window=200, min_periods=1).mean()
+        data["MA_50"] = close_prices.rolling(window=50, min_periods=1).mean()
 
         # Calculate RS Ratings
         rs_ratings = {}
         for period, days in LOOKBACK_PERIODS.items():
-            if len(data) >= days:
-                valid_data = data["Close"].iloc[-days:].dropna()
-                rs_rating = (valid_data / valid_data.iloc[0] - 1) * 100
-                rs_ratings[period] = rs_rating
+            if len(close_prices) >= days:
+                valid_data = close_prices.iloc[-days:]
+                rs_rating = ((valid_data / valid_data.iloc[0] - 1) * 100)
+                rs_ratings[period] = rs_rating.mean(axis=1)  # Calculate mean across ETFs
             else:
                 st.warning(f"Not enough data points for {period} RS calculation.")
                 rs_ratings[period] = pd.Series(index=data.index, dtype='float64')
@@ -68,39 +77,53 @@ def calculate_metrics(data):
         return None, None
 
 def apply_filters(etf_ranking, filters):
-    """Apply filters to the ETF ranking DataFrame."""
+    """Apply specified filters to the DataFrame."""
     if etf_ranking is None or etf_ranking.empty:
         st.warning("No data available for filtering.")
         return pd.DataFrame()
 
-    conditions = []
+    # Ensure the DataFrame has the necessary columns
+    required_columns = ["Above 200 MA", "Above 50 MA", "12M", "3M", "1M", "1W"]
+    if not all(col in etf_ranking.columns for col in required_columns):
+        st.error("Missing required columns in etf_ranking DataFrame.")
+        return etf_ranking
+
+    # Initialize an empty DataFrame to accumulate results
+    filtered_data = etf_ranking.copy()
+
     for col, (operator, value) in filters.items():
         if value:
-            if operator == ">":
-                condition = etf_ranking[col] > etf_ranking["12M"]
-            elif operator == "<":
-                condition = etf_ranking[col] < etf_ranking["12M"]
-            else:
-                st.error("Invalid operator. Only '>' and '<' are supported.")
-                return etf_ranking
-            conditions.append(condition)
+            try:
+                if col == "EMA Trend":
+                    if operator == "==":
+                        filtered_data = filtered_data[filtered_data[col] == value]
+                else:
+                    if operator == ">":
+                        condition = filtered_data[col] > etf_ranking["12M"]
+                    elif operator == "<":
+                        condition = filtered_data[col] < etf_ranking["12M"]
+                    else:
+                        condition = pd.Series(True, index=filtered_data.index)  # default to no change
+                    filtered_data = filtered_data[condition]
+            except Exception as e:
+                st.error(f"Error applying filter for {col}: {e}")
+                continue
 
-    # Combine all conditions
-    combined_condition = conditions[0]
-    for condition in conditions[1:]:
-        combined_condition &= condition
-
-    filtered_data = etf_ranking[combined_condition]
     return filtered_data
 
 def main():
     st.title("ETF Screener & RS Ranking")
     st.write("Live ranking of ETFs based on relative strength.")
 
-    data = get_etf_data(etf_symbols)
+    data = get_etf_data(etf_symbols, period="5y")
     if data is None:
         st.error("Unable to fetch ETF data. Please try again later.")
         return
+
+    st.write("Fetched Data:")
+    st.write(data.head())
+    st.write("Data Types:")
+    st.write(data.dtypes)
 
     data, rs_ratings = calculate_metrics(data)
     if data is None or rs_ratings is None:
@@ -116,19 +139,17 @@ def main():
         data = pd.concat([data, rs_ratings_df], axis=1)
 
         # Prepare etf_ranking DataFrame
-        etf_ranking = data[["MA_200", "MA_50", "12M", "3M", "1M", "1W"]].rename(columns={
-            "MA_200": "Above 200 MA",
-            "MA_50": "Above 50 MA"
-        })
+        etf_ranking = data[[col for col in data.columns if col.startswith('MA_') or col in LOOKBACK_PERIODS]]
+        etf_ranking.columns = [col.replace('Close_', '') for col in etf_ranking.columns]
 
         # Convert boolean columns to True/False explicitly
-        etf_ranking["Above 200 MA"] = (etf_ranking["Above 200 MA"].fillna(False).astype(bool))
-        etf_ranking["Above 50 MA"] = (etf_ranking["Above 50 MA"].fillna(False).astype(bool))
+        for ma_col in ['MA_200', 'MA_50']:
+            etf_ranking[ma_col] = (etf_ranking[ma_col].fillna(False).astype(bool))
 
         # Set up filters
         filters = {
-            "Above 200 MA": (">", st.sidebar.checkbox("Show ETFs Above 200 MA")),
-            "Above 50 MA": (">", st.sidebar.checkbox("Show ETFs Above 50 MA")),
+            "MA_200": (">", st.sidebar.checkbox("Show ETFs Above 200 MA")),
+            "MA_50": (">", st.sidebar.checkbox("Show ETFs Above 50 MA")),
             "EMA Trend": ("==", st.sidebar.selectbox("EMA Trend Filter", ["Show All", "EMA > EMA 20", "EMA < EMA 20"]))
         }
 
@@ -142,8 +163,8 @@ def main():
                 etf_ranking.sort_values(by="12M", ascending=False),
                 use_container_width=True,
                 column_config={
-                    "Above 200 MA": {"type": "boolean"},
-                    "Above 50 MA": {"type": "boolean"}
+                    "MA_200": {"type": "boolean"},
+                    "MA_50": {"type": "boolean"}
                 }
             )
         else:
@@ -153,7 +174,7 @@ def main():
         csv = etf_ranking.to_csv(index=False)
         st.download_button(
             label="Download CSV",
-            data=csv,
+            data(csv),
             file_name="etf_ranking.csv",
             mime="text/csv",
         )
