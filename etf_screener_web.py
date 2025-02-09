@@ -39,8 +39,8 @@ def calculate_metrics(data):
         st.error("Data is empty. Please check the fetched data.")
         st.stop()
 
-    data["MA_200"] = data.xs("Close", axis=1, level=1).rolling(window=200).mean()
-    data["MA_50"] = data.xs("Close", axis=1, level=1).rolling(window=50).mean()
+    data["MA_200"] = data["Close"].rolling(window=200).mean()
+    data["MA_50"] = data["Close"].rolling(window=50).mean()
 
     if data.isna().any().any():
         st.error("Data contains NaN values. Please check the fetched data.")
@@ -48,9 +48,9 @@ def calculate_metrics(data):
 
     rs_ratings = {}
     for period, days in LOOKBACK_PERIODS.items():
-        valid_data = data.xs("Close", axis=1, level=1).iloc[-days:].dropna()
+        valid_data = data["Close"].iloc[-days:].dropna()
         ranked = rankdata(valid_data, method="average") / len(valid_data) * 99
-        rs_ratings[period] = dict(zip(valid_data.index, np.round(ranked, 2)))
+        rs_ratings[period] = dict(zip(valid_data.index, np.round(rankdata(valid_data, method="average") / len(valid_data) * 99, decimals=2)))
 
     return data, rs_ratings
 
