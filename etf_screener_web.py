@@ -35,8 +35,8 @@ def get_etf_data(etf_symbols, period="1y", interval="1d"):
 
 def calculate_metrics(data):
     """Calculate moving averages and RS ratings."""
-    data["MA_200"] = data.rolling(window=200).mean()
-    data["MA_50"] = data.rolling(window=50).mean()
+  data["MA_200"] = data.xs("Close", axis=1, level=1).rolling(window=200).mean()
+    data["MA_50"] = data.xs("Close", axis=1, level=1).rolling(window=50).mean()
 
     if data.isna().any().any():
         st.error("Data contains NaN values. Please check the fetched data.")
