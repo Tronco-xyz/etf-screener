@@ -82,7 +82,7 @@ def main():
         "EMA Trend": ("==", st.sidebar.selectbox("EMA Trend", ["EMA 5 > EMA 20", "EMA 5 < EMA 20", "Unknown"]))
     }
 
-    etf_ranking = apply_filters(etf_ranking, [(k, v[0], v[1]) for k, v in filters.items() if v[1]))
+  etf_ranking = apply_filters(etf_ranking, [(k, v[0], v[1]) for k, v in filters.items() if v[1])
 
     st.dataframe(etf_ranking.sort_values(by="12M", ascending=False))
 
