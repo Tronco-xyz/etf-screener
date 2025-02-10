@@ -49,13 +49,15 @@ if st.button("Rate ETFs"):
                 continue
             data = calculate_indicators(data)
             rating = rate_etf(data)
-            results.append({"Ticker": ticker, "Rating": rating})  # Append as a dictionary
+            # Append a dictionary with ticker and rating
+            results.append({"Ticker": ticker, "Rating": rating})
         except Exception as e:
             st.error(f"Error processing {ticker}: {e}")
 
-    # Convert results to DataFrame only if results list is not empty
+    # Ensure the DataFrame creation works only if there are results
     if results:
-        results_df = pd.DataFrame(results)  # Create a DataFrame from a list of dictionaries
+        results_df = pd.DataFrame(results)  # Convert list of dictionaries to DataFrame
+        st.write("ETF Ratings:")
         st.dataframe(results_df)
     else:
-        st.warning("No valid ETFs to display.")
+        st.warning("No valid data to display.")
