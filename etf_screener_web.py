@@ -15,6 +15,8 @@ def fetch_etf_data(etf_symbol: str) -> pd.DataFrame:
 
 # Define a function to calculate the performance for a single ETF
 def calculate_performance(etf_data: pd.DataFrame, lookback_periods: dict) -> dict:
+    if etf_data is None:
+        return {}
     performance = {}
     for period, days in lookback_periods.items():
         if len(etf_data) >= days:
@@ -25,6 +27,8 @@ def calculate_performance(etf_data: pd.DataFrame, lookback_periods: dict) -> dic
 
 # Define a function to calculate the RS rating for a single ETF
 def calculate_rs_rating(performance: dict, lookback_periods: dict) -> dict:
+    if not performance:
+        return {}
     rs_ratings = {}
     for period in lookback_periods.keys():
         if period in performance and not np.isnan(performance[period]):
@@ -74,13 +78,22 @@ def main():
             rs_ratings[etf_symbol] = calculate_rs_rating(performance[etf_symbol], lookback_periods)
 
     # Create a dataframe for the ETF rankings
-    etf_ranking = pd.DataFrame({
-        "ETF": list(etf_data.keys()),
-        "RS Rating 12M": [rs_ratings[etf]["12M"] for etf in etf_data],
-        "RS Rating 3M": [rs_ratings[etf]["3M"] for etf in etf_data],
-        "RS Rating 1M": [rs_ratings[etf]["1M"] for etf in etf_data],
-        "RS Rating 1W": [rs_ratings[etf]["1W"] for etf in etf_data],
-    })
+    if etf_data:
+        etf_ranking = pd.DataFrame({
+            "ETF": list(etf_data.keys()),
+            "RS Rating 12M": [rs_ratings[etf].get("12M", np.nan) for etf in etf_data],
+            "RS Rating 3M": [rs_ratings[etf].get("3M", np.nan) for etf in etf_data],
+            "RS Rating 1M": [rs_ratings[etf].get("1M", np.nan) for etf in etf_data],
+            "RS Rating 1W": [rs_ratings[etf].get("1W", np.nan) for etf in etf_data],
+        })
+    else:
+        etf_ranking = pd.DataFrame({
+            "ETF": [],
+            "RS Rating 12M": [],
+            "RS Rating 3M": [],
+            "RS Rating 1M": [],
+            "RS Rating 1W": [],
+        })
 
     # Add filters
     st.sidebar.header("Filters")
