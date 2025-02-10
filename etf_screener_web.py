@@ -64,33 +64,40 @@ def main():
             performance[etf_symbol] = perf
             rs_ratings[etf_symbol] = calculate_rs_rating(perf)
 
-    # Check if etf_data is empty
+    # Check if etf_data is empty BEFORE creating DataFrame
     if not etf_data:
         st.warning("No ETF data available. Please check the symbols or data source.")
         etf_ranking = pd.DataFrame(columns=["ETF", "RS Rating 12M", "RS Rating 3M", "RS Rating 1M", "RS Rating 1W", "Above 200 MA", "Above 50 MA", "EMA 5 > EMA 20"])
     else:
-        # Create a DataFrame for rankings
+        # Ensure all lists are properly structured
+        etf_list = list(etf_data.keys())
+        rs_12m = [rs_ratings[etf].get("12M", np.nan) for etf in etf_list]
+        rs_3m = [rs_ratings[etf].get("3M", np.nan) for etf in etf_list]
+        rs_1m = [rs_ratings[etf].get("1M", np.nan) for etf in etf_list]
+        rs_1w = [rs_ratings[etf].get("1W", np.nan) for etf in etf_list]
+
+        # Create DataFrame
         etf_ranking = pd.DataFrame({
-            "ETF": list(etf_data.keys()),
-            "RS Rating 12M": [rs_ratings[etf].get("12M", np.nan) for etf in etf_data],
-            "RS Rating 3M": [rs_ratings[etf].get("3M", np.nan) for etf in etf_data],
-            "RS Rating 1M": [rs_ratings[etf].get("1M", np.nan) for etf in etf_data],
-            "RS Rating 1W": [rs_ratings[etf].get("1W", np.nan) for etf in etf_data],
+            "ETF": etf_list,
+            "RS Rating 12M": rs_12m,
+            "RS Rating 3M": rs_3m,
+            "RS Rating 1M": rs_1m,
+            "RS Rating 1W": rs_1w,
         })
 
         # Add moving averages and EMA trends
         etf_ranking["Above 200 MA"] = [
             etf_data[etf].iloc[-1] > etf_data[etf].rolling(window=200).mean().iloc[-1] if len(etf_data[etf]) >= 200 else False
-            for etf in etf_ranking["ETF"]
+            for etf in etf_list
         ]
         etf_ranking["Above 50 MA"] = [
             etf_data[etf].iloc[-1] > etf_data[etf].rolling(window=50).mean().iloc[-1] if len(etf_data[etf]) >= 50 else False
-            for etf in etf_ranking["ETF"]
+            for etf in etf_list
         ]
         etf_ranking["EMA 5 > EMA 20"] = [
             etf_data[etf].ewm(span=5, adjust=False).mean().iloc[-1] > etf_data[etf].ewm(span=20, adjust=False).mean().iloc[-1]
             if len(etf_data[etf]) >= 20 else False
-            for etf in etf_ranking["ETF"]
+            for etf in etf_list
         ]
 
     # Sidebar filters
