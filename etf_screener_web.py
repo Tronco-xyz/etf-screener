@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from scipy.stats import rankdata
 
 # Define a function to fetch data for a single ETF
 def fetch_etf_data(etf_symbol: str) -> pd.DataFrame:
@@ -62,7 +61,7 @@ def main():
     ]
 
     # Define the lookback periods
-    lookback_periods = {"12M": min(252, 252), "3M": 63, "1M": 21, "1W": 5}
+    lookback_periods = {"12M": 252, "3M": 63, "1M": 21, "1W": 5}
 
     # Initialize the dataframes
     etf_data = {}
@@ -72,7 +71,7 @@ def main():
     # Fetch data for each ETF
     for etf_symbol in etf_symbols:
         data = fetch_etf_data(etf_symbol)
-        if data is not None:
+        if data is not None and not data.empty:
             etf_data[etf_symbol] = data
             performance[etf_symbol] = calculate_performance(data, lookback_periods)
             rs_ratings[etf_symbol] = calculate_rs_rating(performance[etf_symbol], lookback_periods)
@@ -106,18 +105,14 @@ def main():
     if filter_rs_12m:
         etf_ranking = etf_ranking[etf_ranking["RS Rating 12M"] > 80]
     if filter_above_ma_200:
-        # Calculate the 200-day moving average
-        ma_200 = {etf: etf_data[etf].rolling(window=200).mean().iloc[-1] for etf in etf_data}
-        etf_ranking = etf_ranking[etf_ranking["ETF"].isin([etf for etf in etf_data if etf_data[etf].iloc[-1] > ma_200[etf]])]
+        etf_ranking["Above 200 MA"] = [etf_data[etf].iloc[-1] > etf_data[etf].rolling(window=200).mean().iloc[-1] for etf in etf_ranking["ETF"]]
+        etf_ranking = etf_ranking[etf_ranking["Above 200 MA"]]
     if filter_above_ma_50:
-        # Calculate the 50-day moving average
-        ma_50 = {etf: etf_data[etf].rolling(window=50).mean().iloc[-1] for etf in etf_data}
-        etf_ranking = etf_ranking[etf_ranking["ETF"].isin([etf for etf in etf_data if etf_data[etf].iloc[-1] > ma_50[etf]])]
+        etf_ranking["Above 50 MA"] = [etf_data[etf].iloc[-1] > etf_data[etf].rolling(window=50).mean().iloc[-1] for etf in etf_ranking["ETF"]]
+        etf_ranking = etf_ranking[etf_ranking["Above 50 MA"]]
     if filter_ema_trend:
-        # Calculate the EMA trend
-        ema_5 = {etf: etf_data[etf].ewm(span=5, adjust=False).mean().iloc[-1] for etf in etf_data}
-        ema_20 = {etf: etf_data[etf].ewm(span=20, adjust=False).mean().iloc[-1] for etf in etf_data}
-        etf_ranking = etf_ranking[etf_ranking["ETF"].isin([etf for etf in etf_data if ema_5[etf] > ema_20[etf]])]
+        etf_ranking["EMA 5 > EMA 20"] = [etf_data[etf].ewm(span=5, adjust=False).mean().iloc[-1] > etf_data[etf].ewm(span=20, adjust=False).mean().iloc[-1] for etf in etf_ranking["ETF"]]
+        etf_ranking = etf_ranking[etf_ranking["EMA 5 > EMA 20"]]
 
     # Display the ETF rankings
     st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False))
