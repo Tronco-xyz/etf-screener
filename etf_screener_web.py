@@ -42,7 +42,9 @@ def calculate_rs_rating(performance: dict) -> dict:
 # Main function
 def main():
     # ETF symbols and lookback periods
-    etf_symbols = ["XLK", "SOXX", "IGV", "CIBR", "XLF", "XLV", "XLE", "XLY", "GLD", "TLT"]
+    etf_symbols = [
+        "XLK", "SOXX", "IGV", "CIBR", "XLF", "XLV", "XLE", "XLY", "GLD", "TLT"
+    ]
     lookback_periods = {"12M": 252, "3M": 63, "1M": 21, "1W": 5}
 
     # Initialize data structures
