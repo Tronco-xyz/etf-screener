@@ -1,174 +1,121 @@
+import streamlit as st
 import pandas as pd
-from yfinance import download
+import numpy as np
+import yfinance as yf
+from scipy.stats import rankdata
 
-def get_etf_data(symbols, start_date='2013-06-05'):
-    """
-    Download historical price data for ETFs from Yahoo Finance.
-    
-    Parameters:
-        symbols (str list): List of ETF tickers to download.
-        start_date (str): Start date string in 'YYYY-MM-DD' format. Defaults to 2013-06-05.
-
-    Returns:
-        DataFrame: Contains Date and Close prices for each symbol, with multi-index columns ('Date', 'Ticker').
-    """
-    data_dict = {symbol: [] for symbol in symbols}
-    
+# Define a function to fetch data for a single ETF
+def fetch_etf_data(etf_symbol: str) -> pd.DataFrame:
     try:
-        df = download(symbols, start=start_date)
-        
-        # Ensure the date is unique per row
-        if len(df.index.get_level_values(0)) == 1:
-            raise ValueError('Duplicate dates found. Please ensure no overlapping data.')
-            
-        return df
-    
+        data = yf.download(etf_symbol, period="1y", interval="1d")
+        return data['Close']
     except Exception as e:
-        print(f"Error fetching {symbols}: {e}")
+        st.error(f"Error fetching data for {etf_symbol}: {e}")
         return None
 
-def calculate_performance_metrics(data, periods):
-    """
-    Calculate various performance metrics for the given ETF data.
-    
-    Parameters:
-        data (DataFrame): DataFrame with Date and Close prices.
-        periods (list of str): List specifying time periods to compute returns.
+# Define a function to calculate the performance for a single ETF
+def calculate_performance(etf_data: pd.DataFrame, lookback_periods: dict) -> dict:
+    performance = {}
+    for period, days in lookback_periods.items():
+        if len(etf_data) >= days:
+            performance[period] = round(((etf_data.iloc[-1] - etf_data.iloc[-days]) / etf_data.iloc[-days] * 100), 2)
+        else:
+            performance[period] = np.nan
+    return performance
 
-    Returns:
-        dict: Dictionary containing different metrics ('monthly_returns', 'quarterly_returns', 
-              'three_months_rolling_average', etc.).
-    """
-    metric_results = {'monthly_returns': None, 'quartile_returns': None,
-                      'r3m_rolling_average': None, 'ytd_return': None}
-    
-    for period in periods:
-        if period == '12M':
-            monthly_data = data[['Close']].last('BQS').to_frame()
-            
-            # Monthly returns
-            metric_results['monthly_returns'] = (monthly_data / 
-                                                  monthly_data.shift(periods_dict[period])
-                                                  - 1) * 100
-            
-        elif period == '3Q' or ('6M' in periods):
-            quarterly_data = data[['Close']].last('BQS').to_frame()
-            
-            # Quarters returns
-            if len(quarterly_data.index.get_level_values(0)) > 2:
-                metric_results['quartile_returns'] = (quarterly_data / 
-                                                      quarterly_data.shift(periods_dict[period])
-                                                      - 1) * 100
-            
-    return metric_results
+# Define a function to calculate the RS rating for a single ETF
+def calculate_rs_rating(performance: dict, lookback_periods: dict) -> dict:
+    rs_ratings = {}
+    for period in lookback_periods.keys():
+        if period in performance and not np.isnan(performance[period]):
+            rs_ratings[period] = round(performance[period] / max(performance.values()) * 99, 2)
+        else:
+            rs_ratings[period] = np.nan
+    return rs_ratings
 
-def compute_rs_rating(data, window='3M'):
-    """
-    Compute RS ratings for each ETF based on historical performance.
-    
-    Parameters:
-        data (DataFrame): DataFrame with Close prices and their metrics.
-        window (str): Window size to calculate rolling returns. Defaults to '3M'.
-        
-    Returns:
-        Series: Computed RS rating values for each symbol.
-    """
-    rs_rating = pd.Series(index=data.columns.get_level_values(1))
-    
-    # Calculate YTD return
-    ytd_return = ((data['Close'].last('BQS') - data['Close']) / 
-                 data['Close']).mean()
-    
-    # Rolling average of 3 months returns (R3M)
-    r3m_window = periods_dict.get(window, None)
-    
-    if not r3m_window:
-        return rs_rating
-    
-    ytd_return.rolling(r3m_window).apply(lambda x: ((x + 1) ** (1 / len(x))) - 1,
-                                           raw=False)
+# Define the main function
+def main():
+    # Define the ETF symbols
+    etf_symbols = [
+        "XLK", "SOXX", "IGV", "CIBR", "AIQ", "IYZ", 
+        "XLF", "KRE", "IAI", 
+        "XLV", "IBB", "IHI", 
+        "XLE", "XOP", "TAN", 
+        "XLY", "FDN", 
+        "XLI", "ITA", 
+        "XLB", "LIT", 
+        "XLU", 
+        "EFA", "VEA", 
+        "VWO", "EEM", 
+        "EWJ", "MCHI", "INDA", "EWY", "EWT", "EWZ", 
+        "GLD", "SLV", "GDX", 
+        "USO", "BNO", 
+        "DBC", "DBA", "LIT", 
+        "TLT", "IEF", "SHY", 
+        "LQD", "HYG", 
+        "MUB", 
+        "BNDX", "EMB"
+    ]
 
-    # Calculate RS ratings
-    sorted_data = data.sort_values('Close', ascending=False)
-    
-    rank = sorted_data['Close'].rank(ascending=False, method='min')
-    
-    rs_rating[sorted_data.columns.get_level_values(1)] = (rank / len(sorted_data)) * 100
-    
-    return rs_rating
+    # Define the lookback periods
+    lookback_periods = {"12M": min(252, 252), "3M": 63, "1M": 21, "1W": 5}
 
-def apply_filters(data, etf_rs_rating):
-    """
-    Apply custom filters based on user-defined criteria.
-    
-    Parameters:
-        data (DataFrame): Data containing various metrics and ranks.
-        etf_rs_rating (Series): Series of RS ratings for each symbol.
+    # Initialize the dataframes
+    etf_data = {}
+    performance = {}
+    rs_ratings = {}
 
-    Returns:
-        DataFrame: Subsetted dataframe after applying all the filtering conditions.
-    """
-    # Exclusion filter
-    exclusion = (~data.index.get_level_values(1).isin(etf_rs_rating.loc[etf_rs_rating >= 80].index))
-    
-    filtered_data = data[exclusion]
-    
-    return filtered_data
+    # Fetch data for each ETF
+    for etf_symbol in etf_symbols:
+        data = fetch_etf_data(etf_symbol)
+        if data is not None:
+            etf_data[etf_symbol] = data
+            performance[etf_symbol] = calculate_performance(data, lookback_periods)
+            rs_ratings[etf_symbol] = calculate_rs_rating(performance[etf_symbol], lookback_periods)
 
-def sort_etfs(filtered_data, ytd_threshold=25.0):
-    """
-    Sort the remaining ETF candidates based on their performance metrics and RS ratings.
-    
-    Parameters:
-        filtered_data (DataFrame): DataFrame containing various metrics after filtering.
-        ytd_threshold (float): Minimum YTD Return required to qualify for sorting.
+    # Create a dataframe for the ETF rankings
+    etf_ranking = pd.DataFrame({
+        "ETF": list(etf_data.keys()),
+        "RS Rating 12M": [rs_ratings[etf]["12M"] for etf in etf_data],
+        "RS Rating 3M": [rs_ratings[etf]["3M"] for etf in etf_data],
+        "RS Rating 1M": [rs_ratings[etf]["1M"] for etf in etf_data],
+        "RS Rating 1W": [rs_ratings[etf]["1W"] for etf in etf_data],
+    })
 
-    Returns:
-        pd.DataFrame: Sorted dataframe with highest overall ranking first, considering other parameters like YTD return and RS rating.
-    """
-    # Check if any symbol remains in the filtered data
-    if len(filtered_data) == 0 or not isinstance(filtered_data, pd.DataFrame):
-        raise ValueError("No ETFs left after filtering.")
-    
-    # Calculate YTD Return for remaining symbols
-    ytd_return = ((filtered_data['Close'].last('BQS') - 
-                  filtered_data['Close']) / filtered_data['Close']).mean()
-    
-    # Select candidates meeting YTD return threshold criteria and have at least 250 days of history
-    final_selection = filtered_data[((ytd_return > ytd_threshold) & (len(filtered_data.index.get_level_values(1)) >= 250))]
-    
-    if len(final_selection) == 0:
-        raise ValueError("No ETFs meet the YTD return threshold criteria.")
-        
-    # Sort based on overall rank and other parameters
-    final_ranking = pd.DataFrame(index=[0], 
-                                 columns=['Symbol', 'Performance Score', 'YTD Return'])
-    
-    for symbol in final_selection.columns.get_level_values(1):
-        score = (etf_rs_rating[symbol] / 100) * len(final_selection)
-        ytd_score = ((final_selection[f"Close_{symbol}"].last('BQS') - 
-                    final_selection[f"Close_{symbol}"]) / 
-                   final_selection[f"Close_{symbol}"]).mean()
-        
-        total_score = score + (ytd_score * 0.35)  # Adding YTD importance
-        
-        final_ranking.loc[0, symbol] = [total_score,
-                                        ytd_score if 'YTD Return' in symbols else None]
-    
-    return final_ranking.T
+    # Add filters
+    st.sidebar.header("Filters")
+    filter_rs_12m = st.sidebar.checkbox("RS 12M > 80")
+    filter_above_ma_200 = st.sidebar.checkbox("Above 200 MA")
+    filter_above_ma_50 = st.sidebar.checkbox("Above 50 MA")
+    filter_ema_trend = st.sidebar.checkbox("EMA 5 > EMA 20")
 
-# Dictionary to map time periods to their respective number of quarters/years or months
-periods_dict = {
-    '12M': 1,
-    '3Q': 3,
-    '6M': 2,
-}
+    # Apply filters
+    if filter_rs_12m:
+        etf_ranking = etf_ranking[etf_ranking["RS Rating 12M"] > 80]
+    if filter_above_ma_200:
+        # Calculate the 200-day moving average
+        ma_200 = {etf: etf_data[etf].rolling(window=200).mean().iloc[-1] for etf in etf_data}
+        etf_ranking = etf_ranking[etf_ranking["ETF"].isin([etf for etf in etf_data if etf_data[etf].iloc[-1] > ma_200[etf]])]
+    if filter_above_ma_50:
+        # Calculate the 50-day moving average
+        ma_50 = {etf: etf_data[etf].rolling(window=50).mean().iloc[-1] for etf in etf_data}
+        etf_ranking = etf_ranking[etf_ranking["ETF"].isin([etf for etf in etf_data if etf_data[etf].iloc[-1] > ma_50[etf]])]
+    if filter_ema_trend:
+        # Calculate the EMA trend
+        ema_5 = {etf: etf_data[etf].ewm(span=5, adjust=False).mean().iloc[-1] for etf in etf_data}
+        ema_20 = {etf: etf_data[etf].ewm(span=20, adjust=False).mean().iloc[-1] for etf in etf_data}
+        etf_ranking = etf_ranking[etf_ranking["ETF"].isin([etf for etf in etf_data if ema_5[etf] > ema_20[etf]])]
 
-# List of metrics to calculate (can be adjusted based on user requirements)
-metrics_to_calculate = ['monthly_returns', 'quartile_returns']
+    # Display the ETF rankings
+    st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False))
 
-# Calculate performance metrics
-data = get_data(periods=metrics_to_calculate) # Assume get_data is a placeholder function
+    # Download button
+    st.download_button(
+        label="Download CSV",
+        data=etf_ranking.to_csv(index=False),
+        file_name="etf_ranking.csv",
+        mime="text/csv"
+    )
 
-# Compute RS ratings for each symbol
-rs_rating
+if __name__ == "__main__":
+    main()
