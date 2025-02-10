@@ -6,24 +6,14 @@ from scipy.stats import rankdata
 
 # Updated ETF List without Leverage or Short ETFs
 etf_symbols = [
- "XLK", "SOXX", "IGV", "CIBR", "AIQ", "IYZ", 
-"XLF", "KRE", "IAI", 
-"XLV", "IBB", "IHI", 
-"XLE", "XOP", "TAN", 
-"XLY", "FDN", 
-"XLI", "ITA", 
-"XLB", "LIT", 
-"XLU", 
-"EFA", "VEA", 
-"VWO", "EEM", 
-"EWJ", "MCHI", "INDA", "EWY", "EWT", "EWZ", 
-"GLD", "SLV", "GDX", 
-"USO", "BNO", 
-"DBC", "DBA", "LIT", 
-"TLT", "IEF", "SHY", 
-"LQD", "HYG", 
-"MUB", 
-"BNDX", "EMB"
+    "XLK", "XLV", "XLF", "XLY", "XLP", "XLE", "XLU", "XLI", "XLB", "XLRE", "XLC",
+    "SMH", "CIBR", "BOTZ", "SKYY", "FINX", "ICLN", "XOP", "IBB", "ITA", "XME", "IFRA", "ONLN",
+    "SPY", "QQQ", "DIA", "IWM", "EEM", "EFA", "TLT", "HYG",
+    "VXUS", "VEU", "VSS", "SCHF", "VGK", "IEV", "EZU", "FEZ", "EWG", "EWU",
+    "VWO", "EEM", "FXI", "MCHI", "ASHR", "EWJ", "FLJP", "AAXJ", "VPL",
+    "EWC", "FLCA", "ILF", "EWZ", "EWW", "CWI", "ACWX", "DLS", "DGT", "IQDG",
+    "GLD", "SLV", "PDBC", "DBA", "WEAT", "CORN", "SOYB", "USO", "UNG", "LIT", "REMX",
+    "ARKK", "ARKG", "ARKQ", "ARKF", "WCLD", "FIVG", "XITK", "VYM", "SCHD", "SDY", "DVY"
 ]
 
 # Streamlit UI
@@ -100,7 +90,7 @@ etf_ranking = pd.DataFrame({
     "EMA Trend": ema_trend.reindex(performance_df.index).fillna("Unknown").tolist()
 })
 
-# Apply filters safely
+# Apply filters
 if filter_rs_12m:
     etf_ranking = etf_ranking[etf_ranking["RS Rating 12M"] > 80]
 if filter_above_ma_200:
@@ -110,16 +100,10 @@ if filter_above_ma_50:
 if filter_ema_trend:
     etf_ranking = etf_ranking[etf_ranking["EMA Trend"] == "EMA 5 > EMA 20"]
 
-# Add performance metrics at the end, ensuring proper alignment
+# Add performance metrics at the end
 performance_columns = ["12M Performance (%)", "3M Performance (%)", "1M Performance (%)", "1W Performance (%)"]
 for col in performance_columns:
-    period = col.replace(" Performance (%)", "")
-    if period in performance_df.columns:
-        etf_ranking[col] = performance_df[period].reindex(etf_ranking["ETF"]).values
-
-# Ensure only two decimal places for all numerical columns
-for col in etf_ranking.select_dtypes(include=[np.number]).columns:
-    etf_ranking[col] = etf_ranking[col].round(2)
+    etf_ranking[col] = performance_df[col.replace(" Performance (%)", "")].tolist()
 
 # Display ETF Rankings in Streamlit
 st.dataframe(etf_ranking.sort_values(by="RS Rating 12M", ascending=False))
@@ -131,4 +115,3 @@ st.download_button(
     file_name="etf_ranking.csv",
     mime="text/csv"
 )
-
