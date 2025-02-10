@@ -43,12 +43,20 @@ if st.button("Rate ETFs"):
     results = []
     
     for ticker in tickers:
-        data = yf.download(ticker, start=start_date, end=end_date)
-        data = calculate_indicators(data)
-        rating = rate_etf(data)
-        results.append({"Ticker": ticker, "Rating": rating})
+        try:
+            data = yf.download(ticker, start=start_date, end=end_date)
+            if data.empty:
+                st.warning(f"No data found for {ticker}.")
+                continue
+            data = calculate_indicators(data)
+            rating = rate_etf(data)
+            results.append({"Ticker": ticker, "Rating": rating})
+        except Exception as e:
+            st.error(f"Error processing {ticker}: {e}")
     
-    # Display results
-    results_df = pd.DataFrame(results)
-    st.dataframe(results_df)
-
+    # Convert results to DataFrame only if results list is not empty
+    if results:
+        results_df = pd.DataFrame(results)
+        st.dataframe(results_df)
+    else:
+        st.warning("No valid ETFs to display.")
