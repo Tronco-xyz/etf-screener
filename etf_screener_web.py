@@ -4,10 +4,11 @@ import numpy as np
 import yfinance as yf
 
 # Define a function to fetch data for a single ETF
-def fetch_etf_data(etf_symbol: str) -> pd.DataFrame:
+def fetch_etf_data(etf_symbol: str) -> pd.Series:
     try:
         data = yf.download(etf_symbol, period="1y", interval="1d")
         if data.empty:
+            st.warning(f"No data found for {etf_symbol}")
             return None
         return data['Close']
     except Exception as e:
@@ -41,7 +42,9 @@ def calculate_rs_rating(performance: dict) -> dict:
 
 # Main function
 def main():
-    # ETF symbols and lookback periods
+    st.title("ETF Screener")
+
+    # Define ETF symbols and lookback periods
     etf_symbols = [
         "XLK", "SOXX", "IGV", "CIBR", "XLF", "XLV", "XLE", "XLY", "GLD", "TLT"
     ]
@@ -52,7 +55,7 @@ def main():
     performance = {}
     rs_ratings = {}
 
-    # Fetch and process data
+    # Fetch and process data for each ETF
     for etf_symbol in etf_symbols:
         data = fetch_etf_data(etf_symbol)
         if data is not None:
