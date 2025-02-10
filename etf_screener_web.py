@@ -1,7 +1,6 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
 
 # Helper function to calculate moving averages
 def calculate_indicators(data):
@@ -41,7 +40,7 @@ end_date = st.date_input("End Date", value=pd.to_datetime("2023-12-31"))
 if st.button("Rate ETFs"):
     tickers = [ticker.strip() for ticker in tickers.split(",")]
     results = []
-    
+
     for ticker in tickers:
         try:
             data = yf.download(ticker, start=start_date, end=end_date)
@@ -50,16 +49,13 @@ if st.button("Rate ETFs"):
                 continue
             data = calculate_indicators(data)
             rating = rate_etf(data)
-            # Append a dictionary for each ETF
-            results.append({"Ticker": ticker, "Rating": rating})
+            results.append({"Ticker": ticker, "Rating": rating})  # Append as a dictionary
         except Exception as e:
             st.error(f"Error processing {ticker}: {e}")
-    
-    # Check if results contain data before creating DataFrame
+
+    # Convert results to DataFrame only if results list is not empty
     if results:
         results_df = pd.DataFrame(results)  # Create a DataFrame from a list of dictionaries
         st.dataframe(results_df)
     else:
         st.warning("No valid ETFs to display.")
-
-
